@@ -299,6 +299,54 @@ app.get("/api/auth/me", async (req, res) => {
 
 
 // ✅ Save + Verify GitHub Token
+// =============================================================
+// =============== USER GITHUB INTEGRATION ======================
+// =============================================================
+
+// ✅ Save GitHub Token (frontend sends token)
+app.post("/api/user/github-token", verifyToken, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Missing GitHub token" });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const encryptedToken = encrypt(token);
+
+    // Verify token directly with GitHub
+    const ghRes = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `token ${token}`,
+        "User-Agent": "CodeSharingApp",
+      },
+    });
+
+    if (!ghRes.ok) return res.status(401).json({ error: "Invalid GitHub token" });
+
+    const ghData = await ghRes.json();
+
+    // Save to user profile
+    user.githubToken = encryptedToken;
+    user.githubUsername = ghData.login;
+    user.githubEmail = ghData.email;
+    user.githubAvatar = ghData.avatar_url;
+    await user.save();
+
+    res.json({
+      success: true,
+      githubUsername: ghData.login,
+      githubEmail: ghData.email,
+      githubAvatar: ghData.avatar_url,
+    });
+  } catch (err) {
+    console.error("GitHub token save error:", err);
+    res.status(500).json({ error: "Server error saving GitHub token" });
+  }
+});
+
+
+// ✅ Get current user’s GitHub info
 app.get("/api/user/github-token", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select(
@@ -307,7 +355,6 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // ✅ If no token saved
     if (!user.githubToken) {
       return res.json({
         connected: false,
@@ -319,19 +366,8 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
       });
     }
 
-    // ✅ Decrypt the token before using it
     const decryptedToken = decrypt(user.githubToken);
-    if (!decryptedToken) {
-      console.warn("⚠️ GitHub token decrypt failed for user:", user.username);
-      user.githubToken = "";
-      await user.save();
-      return res.json({
-        connected: false,
-        message: "Invalid or corrupted GitHub token. Please reconnect GitHub.",
-      });
-    }
 
-    // ✅ Verify decrypted token with GitHub API
     const ghRes = await fetch("https://api.github.com/user", {
       headers: {
         Authorization: `token ${decryptedToken}`,
@@ -339,70 +375,7 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
       },
     });
 
-    if (!ghRes.ok) {
-      // Token expired → auto disconnect
-      user.githubToken = "";
-      user.githubUsername = "";
-      await user.save();
-      return res.json({
-        connected: false,
-        expired: true,
-        message: "GitHub token expired. Please reconnect.",
-      });
-    }
-
-    const ghData = await ghRes.json();
-
-    // ✅ Return verified info
-    res.json({
-      connected: true,
-      githubUsername: ghData.login,
-      githubEmail: ghData.email || user.githubEmail,
-      githubAvatar: ghData.avatar_url || user.githubAvatar,
-      username: user.username,
-      email: user.email,
-      token: decryptedToken, // 👈 send decrypted token to frontend so it can verify
-    });
-  } catch (err) {
-    console.error("Fetch GitHub token error:", err);
-    res.status(500).json({ error: "Server error verifying GitHub token" });
-  }
-});
-
-
-// ✅ Get current user’s GitHub token & info
-app.get("/api/user/github-token", verifyToken, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId).select(
-      "githubToken githubUsername githubEmail githubAvatar username email"
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // If user has no GitHub token saved
-    if (!user.githubToken) {
-      return res.json({
-        connected: false,
-        githubUsername: null,
-        githubEmail: null,
-        githubAvatar: null,
-        username: user.username,
-        email: user.email,
-      });
-    }
-
-    // ✅ Verify token validity via GitHub API
-    const ghCheck = await fetch("https://api.github.com/user", {
-      headers: {
-        Authorization: `token ${user.githubToken}`,
-        "User-Agent": "CodeSharingApp",
-      },
-    });
-
-    // If token expired or invalid, disconnect automatically
-    if (ghCheck.status === 401) {
+    if (ghRes.status === 401) {
       user.githubToken = "";
       user.githubUsername = null;
       user.githubEmail = null;
@@ -411,19 +384,13 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
 
       return res.json({
         connected: false,
-        githubUsername: null,
-        githubEmail: null,
-        githubAvatar: null,
-        username: user.username,
-        email: user.email,
         expired: true,
-        message: "GitHub token invalid or expired — disconnected automatically.",
+        message: "GitHub token invalid or expired — please reconnect.",
       });
     }
 
-    const ghData = await ghCheck.json();
+    const ghData = await ghRes.json();
 
-    // ✅ Return combined info
     res.json({
       connected: true,
       githubUsername: user.githubUsername || ghData.login,
@@ -437,6 +404,7 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Server error verifying GitHub token" });
   }
 });
+
 
 
 // ✅ Remove GitHub token (disconnect)
