@@ -65,16 +65,27 @@ function decrypt(text) {
 
 
 
-app.use(cors({
-  origin: [
-    "http://localhost:5173",   // your local Vite dev server
-    "http://localhost:5174",   // sometimes Vite picks this port
-    "https://code-sharing-frontend.vercel.app" // your deployed frontend (future)
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-admin-key"],
-  credentials: true
-}));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://code-sharing-frontend.vercel.app", // your Vercel site (later)
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, x-admin-key"
+  );
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 
 mongoose.set("strictQuery", false);
