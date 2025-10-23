@@ -5,13 +5,11 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-
+const crypto = require("crypto");
 
 dotenv.config();
 const app = express();
 
-
-const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 // --- Safety checks ---
 if (!process.env.MONGO_URI) {
   console.error("❌ MONGO_URI not set in environment");
@@ -26,8 +24,7 @@ if (!process.env.ADMIN_SECRET) {
   process.exit(1);
 }
 
-const crypto = require("crypto");
-
+// --- Encryption Helpers ---
 const ENC_KEY = process.env.ENC_KEY || "12345678901234567890123456789012"; // must be 32 bytes
 const IV_LENGTH = 16;
 
@@ -42,15 +39,9 @@ function encrypt(text) {
 function decrypt(text) {
   try {
     if (!text) return null;
-
-    // Handle plain-text tokens (not encrypted)
-    if (!text.includes(":")) {
-      return text; // return as-is
-    }
-
+    if (!text.includes(":")) return text;
     const parts = text.split(":");
     if (parts.length !== 2) return text;
-
     const iv = Buffer.from(parts[0], "hex");
     const encryptedText = Buffer.from(parts[1], "hex");
     const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
@@ -63,35 +54,44 @@ function decrypt(text) {
   }
 }
 
-
-
+// --- Proper CORS Setup ---
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
-  "https://code-sharing-frontend.vercel.app", // your Vercel site (later)
+  "https://code-sharing-frontend.vercel.app",
+  "https://code-sharing-frontend-pi.vercel.app", // ✅ Added correct production URL
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, x-admin-key"
-  );
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-key"],
+    credentials: true,
+  })
+);
 
-
-mongoose.set("strictQuery", false);
-
+// --- Middleware ---
 app.use(express.json());
 
+// --- MongoDB Connection ---
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
+
+// --- Example route to confirm CORS ---
+app.get("/cors-test", (req, res) => {
+  res.json({ message: "✅ CORS is working fine!" });
+});
 
 
 
