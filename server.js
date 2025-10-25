@@ -443,6 +443,19 @@ app.delete("/api/user/github-token", verifyToken, async (req, res) => {
   }
 });
 
+app.get("/api/users/:username", async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username })
+      .select("username githubUsername githubAvatar createdAt")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const snippets = await Snippet.find({ author: user.username, isPublic: true }).lean();
+    res.json({ user, snippets });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // =============================================================
@@ -790,6 +803,20 @@ app.get("/api/snippets/search", async (req, res) => {
 });
 
 
+app.get("/api/snippets/trending", async (req, res) => {
+  try {
+    const snippets = await Snippet.find({ isPublic: true })
+      .sort({ "likes.length": -1, createdAt: -1 })
+      .limit(10)
+      .lean();
+    res.json(snippets);
+  } catch (err) {
+    console.error("trending error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Current user's snippets
 app.get("/api/snippets/mine", verifyToken, async (req, res) => {
   try {
@@ -933,6 +960,43 @@ app.post("/api/snippets/:id/comments", verifyToken, async (req, res) => {
   }
 });
 
+
+// Delete a comment
+app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res) => {
+  try {
+    const snippet = await Snippet.findById(req.params.id);
+    if (!snippet) return res.status(404).json({ error: "Snippet not found" });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    const comment = snippet.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+    // Only allow author of comment or snippet to delete
+    if (comment.user !== user.username && snippet.author !== user.username) {
+      return res.status(403).json({ error: "Not authorized to delete this comment" });
+    }
+
+    comment.remove();
+    await snippet.save();
+    res.json(snippet);
+  } catch (err) {
+    console.error("delete comment error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+app.post("/api/snippets/:id/view", async (req, res) => {
+  try {
+    await Snippet.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+    res.json({ message: "View recorded" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.post("/api/snippets/:id/sync-github", verifyToken, async (req, res) => {
