@@ -1019,6 +1019,7 @@ app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res
 
 
 
+
 app.post("/api/snippets/:id/view", async (req, res) => {
   try {
     const snippet = await Snippet.findById(req.params.id);
@@ -1129,6 +1130,38 @@ app.get("/api/snippets/search", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// ✅ Get snippets by tag (public only)
+app.get("/api/snippets/tag/:tag", async (req, res) => {
+  try {
+    const { tag } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const regex = new RegExp(tag, "i"); // case-insensitive match
+    const [snippets, total] = await Promise.all([
+      Snippet.find({ isPublic: true, tags: regex })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Snippet.countDocuments({ isPublic: true, tags: regex }),
+    ]);
+
+    return res.json({
+      snippets,
+      page,
+      totalPages: Math.ceil(total / limit),
+      total,
+    });
+  } catch (err) {
+    console.error("get snippets by tag error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
