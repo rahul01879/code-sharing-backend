@@ -148,7 +148,7 @@ const snippetSchema = new mongoose.Schema(
 
     
     views: { type: Number, default: 0 },
-    viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    viewedBy: [{ type: mongoose.Schema.Types.Mixed }], 
   },
   { timestamps: true }
 );
@@ -1019,17 +1019,20 @@ app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res
 
 
 
-app.post("/api/snippets/:id/view", verifyTokenOptional, async (req, res) => {
+app.post("/api/snippets/:id/view", async (req, res) => {
   try {
     const snippet = await Snippet.findById(req.params.id);
     if (!snippet) return res.status(404).json({ error: "Snippet not found" });
 
-    const userId = req.userId || req.ip; // either logged-in user or guest IP
+    const userIdOrIp = req.userId || req.ip; // logged-in user or guest IP
 
-    // Check if already viewed
-    if (!snippet.viewedBy.includes(userId)) {
+    // Make sure viewedBy is an array
+    if (!snippet.viewedBy) snippet.viewedBy = [];
+
+    // Only increment if not already viewed
+    if (!snippet.viewedBy.includes(userIdOrIp)) {
       snippet.views += 1;
-      snippet.viewedBy.push(userId);
+      snippet.viewedBy.push(userIdOrIp);
       await snippet.save();
     }
 
