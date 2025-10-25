@@ -137,6 +137,7 @@ const snippetSchema = new mongoose.Schema(
     isPublic: { type: Boolean, default: true, index: true },
     tags: [{ type: String, trim: true, lowercase: true }],
     likes: [{ type: String }],
+
     comments: [
       {
         user: { type: String, required: true },
@@ -144,6 +145,9 @@ const snippetSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+
+    
+    views: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -999,15 +1003,25 @@ app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res
 
 
 
-
 app.post("/api/snippets/:id/view", async (req, res) => {
   try {
-    await Snippet.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
-    res.json({ message: "View recorded" });
+    const snippet = await Snippet.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+
+    if (!snippet) {
+      return res.status(404).json({ error: "Snippet not found" });
+    }
+
+    res.json({ message: "View recorded", views: snippet.views });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error updating views:", err);
+    res.status(500).json({ error: "Server error while recording view" });
   }
 });
+
 
 
 app.post("/api/snippets/:id/sync-github", verifyToken, async (req, res) => {
