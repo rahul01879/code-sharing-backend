@@ -85,6 +85,8 @@ const loginLimiter = rateLimit({
   message: "Too many login attempts. Try again later."
 });
 app.use("/api/auth/login", loginLimiter);
+app.disable('x-powered-by');
+
 // --- Middleware ---
 app.use(express.json());
 app.use(helmet());
