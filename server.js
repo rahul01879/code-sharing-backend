@@ -148,6 +148,7 @@ const snippetSchema = new mongoose.Schema(
 
     
     views: { type: Number, default: 0 },
+    viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );
@@ -1003,16 +1004,18 @@ app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res
 
 
 
-app.post("/api/snippets/:id/view", async (req, res) => {
+app.post("/api/snippets/:id/view", verifyTokenOptional, async (req, res) => {
   try {
-    const snippet = await Snippet.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { views: 1 } },
-      { new: true }
-    );
+    const snippet = await Snippet.findById(req.params.id);
+    if (!snippet) return res.status(404).json({ error: "Snippet not found" });
 
-    if (!snippet) {
-      return res.status(404).json({ error: "Snippet not found" });
+    const userId = req.userId || req.ip; // either logged-in user or guest IP
+
+    // Check if already viewed
+    if (!snippet.viewedBy.includes(userId)) {
+      snippet.views += 1;
+      snippet.viewedBy.push(userId);
+      await snippet.save();
     }
 
     res.json({ message: "View recorded", views: snippet.views });
@@ -1021,6 +1024,7 @@ app.post("/api/snippets/:id/view", async (req, res) => {
     res.status(500).json({ error: "Server error while recording view" });
   }
 });
+
 
 
 
