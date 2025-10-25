@@ -6,7 +6,8 @@ const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 dotenv.config();
 const app = express();
 
@@ -57,8 +58,6 @@ function decrypt(text) {
 // --- Proper CORS Setup ---
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5174",
-  "https://code-sharing-frontend.vercel.app",
   "https://code-sharing-frontend-pi.vercel.app", // ✅ Added correct production URL
 ];
 
@@ -79,8 +78,16 @@ app.use(
   })
 );
 
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per 15 mins
+  message: "Too many login attempts. Try again later."
+});
+app.use("/api/auth/login", loginLimiter);
 // --- Middleware ---
 app.use(express.json());
+app.use(helmet());
 
 // --- MongoDB Connection ---
 mongoose
