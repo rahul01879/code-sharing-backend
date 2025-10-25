@@ -207,6 +207,20 @@ const verifyAdmin = (req, res, next) => {
   next();
 };
 
+const verifyTokenOptional = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return next(); // guest
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch {
+    next(); // invalid token → treat as guest
+  }
+};
+
+
 // =============================================================
 // =============== AUTH ROUTES ================================
 // =============================================================
@@ -427,6 +441,7 @@ app.get("/api/user/github-token", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Server error verifying GitHub token" });
   }
 });
+
 
 
 
