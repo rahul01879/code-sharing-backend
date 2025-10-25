@@ -91,6 +91,15 @@ app.disable('x-powered-by');
 app.use(express.json());
 app.use(helmet());
 
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 200, // 200 requests per IP per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+
 // --- MongoDB Connection ---
 mongoose
   .connect(process.env.MONGO_URI)
@@ -206,7 +215,7 @@ app.post("/api/auth/signup", async (req, res) => {
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(400).json({ error: "Email already registered" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const user = new User({ username, email: email.toLowerCase(), password: hashedPassword });
     await user.save();
 
