@@ -961,7 +961,7 @@ app.post("/api/snippets/:id/comments", verifyToken, async (req, res) => {
 });
 
 
-// Delete a comment
+// ✅ Delete a comment safely
 app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res) => {
   try {
     const snippet = await Snippet.findById(req.params.id);
@@ -970,22 +970,33 @@ app.delete("/api/snippets/:id/comments/:commentId", verifyToken, async (req, res
     const user = await User.findById(req.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
 
-    const comment = snippet.comments.id(req.params.commentId);
-    if (!comment) return res.status(404).json({ error: "Comment not found" });
+    // ✅ Find the comment manually
+    const commentIndex = snippet.comments.findIndex(
+      (c) => c._id.toString() === req.params.commentId
+    );
+    if (commentIndex === -1)
+      return res.status(404).json({ error: "Comment not found" });
 
-    // Only allow author of comment or snippet to delete
+    const comment = snippet.comments[commentIndex];
+
+    // ✅ Check permission (only comment author or snippet author)
     if (comment.user !== user.username && snippet.author !== user.username) {
-      return res.status(403).json({ error: "Not authorized to delete this comment" });
+      return res
+        .status(403)
+        .json({ error: "Not authorized to delete this comment" });
     }
 
-    comment.remove();
+    // ✅ Remove comment by index
+    snippet.comments.splice(commentIndex, 1);
     await snippet.save();
-    res.json(snippet);
+
+    return res.json({ message: "Comment deleted", snippet });
   } catch (err) {
     console.error("delete comment error:", err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
