@@ -793,34 +793,44 @@ app.get("/api/snippets/search", async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    if (!q) return res.json([]);
+    if (!q || q.trim() === "") return res.json([]);
 
-    const regex = new RegExp(q, "i");
+    const regex = new RegExp(q.trim(), "i");
 
+    // ✅ include all relevant search fields
     const filter = {
       isPublic: true,
       $or: [
         { title: regex },
         { description: regex },
         { language: regex },
-        { tags: regex },
-        { author: regex }, // ✅ added author search
+        { tags: { $in: [regex] } }, // ✅ proper tag search
+        { author: regex },
       ],
     };
 
-
+    // ✅ find and paginate results
     const snippets = await Snippet.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    return res.json(snippets); // ✅ return array only
+    // ✅ total count for pagination (optional)
+    const totalCount = await Snippet.countDocuments(filter);
+
+    return res.json({
+      snippets,
+      totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit),
+    });
   } catch (err) {
     console.error("search error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 
 app.get("/api/snippets/trending", async (req, res) => {
