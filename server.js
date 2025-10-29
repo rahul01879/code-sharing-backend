@@ -1124,6 +1124,7 @@ app.get("/api/snippets/search", async (req, res) => {
         { language: regex },
         { description: regex },
         { tags: regex },
+        { "author.username": regex },
       ],
     })
       .sort({ createdAt: -1 })
