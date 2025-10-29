@@ -789,47 +789,30 @@ app.get("/api/snippets/public", async (req, res) => {
 app.get("/api/snippets/search", async (req, res) => {
   try {
     const { q } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    if (!q) return res.json([]);
 
-    if (!q || q.trim() === "") return res.json([]);
+    const keywords = q.split(" ").filter(Boolean);
+    const regexArray = keywords.map((kw) => new RegExp(kw, "i"));
 
-    const regex = new RegExp(q.trim(), "i");
-
-    // ✅ include all relevant search fields
     const filter = {
       isPublic: true,
       $or: [
-        { title: regex },
-        { description: regex },
-        { language: regex },
-        { tags: { $in: [regex] } }, // ✅ proper tag search
-        { author: regex },
+        { title: { $in: regexArray } },
+        { description: { $in: regexArray } },
+        { language: { $in: regexArray } },
+        { tags: { $in: regexArray } },
+        { author: { $in: regexArray } },
       ],
     };
 
-    // ✅ find and paginate results
-    const snippets = await Snippet.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // ✅ total count for pagination (optional)
-    const totalCount = await Snippet.countDocuments(filter);
-
-    return res.json({
-      snippets,
-      totalCount,
-      currentPage: page,
-      totalPages: Math.ceil(totalCount / limit),
-    });
+    const snippets = await Snippet.find(filter).sort({ createdAt: -1 }).lean();
+    return res.json(snippets);
   } catch (err) {
     console.error("search error:", err);
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
