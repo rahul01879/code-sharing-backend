@@ -827,20 +827,21 @@ app.get("/api/snippets/search", async (req, res) => {
 
 
 
-// ✅ Trending snippets (by upvotes + views)
+// ✅ Fetch Trending Snippets (sorted by likes)
 app.get("/api/snippets/trending", async (req, res) => {
   try {
-    const snippets = await Snippet.find({ isPublic: true })
-      .sort({ upvotes: -1, views: -1 })
-      .limit(10)
+    const trendingSnippets = await Snippet.find({ isPublic: true })
+      .sort({ likes: -1, views: -1, createdAt: -1 }) // most liked, then most viewed, then recent
+      .limit(10) // top 10 trending
       .lean();
 
-    res.json(snippets);
+    res.json(trendingSnippets);
   } catch (err) {
-    console.error("trending error:", err);
-    res.status(500).json({ error: "Failed to fetch trending snippets" });
+    console.error("Error fetching trending snippets:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
