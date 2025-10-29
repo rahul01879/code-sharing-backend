@@ -786,38 +786,44 @@ app.get("/api/snippets/public", async (req, res) => {
 });
 
 // Search snippets with pagination (same shape as /public)
+// ✅ Improved Search Route
 app.get("/api/snippets/search", async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q) return res.json([]);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
-    // split query into keywords
-    const keywords = q.split(" ").filter(Boolean);
-    if (keywords.length === 0) return res.json([]);
+    if (!q || !q.trim()) {
+      return res.json([]);
+    }
 
-    const regexArray = keywords.map((kw) => new RegExp(kw, "i"));
+    const regex = new RegExp(q.trim(), "i");
 
     const filter = {
       isPublic: true,
       $or: [
-        { title: { $in: regexArray } },
-        { description: { $in: regexArray } },
-        { language: { $in: regexArray } },
-        { tags: { $in: regexArray } },
-        { author: { $in: regexArray } },
+        { title: regex },
+        { description: regex },
+        { language: regex },
+        { tags: regex },
+        { author: regex },
       ],
     };
 
     const snippets = await Snippet.find(filter)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    return res.json({ snippets });
+    res.json(snippets);
   } catch (err) {
     console.error("search error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Server error while searching" });
   }
 });
+
 
 
 
