@@ -136,7 +136,12 @@ const snippetSchema = new mongoose.Schema(
     author: { type: String, required: true },
     isPublic: { type: Boolean, default: true, index: true },
     tags: [{ type: String, trim: true, lowercase: true }],
-    likes: [{ type: String }],
+     likes: [
+      {
+        userId: { type: String, required: true },
+        date: { type: Date, default: Date.now },
+      },
+    ],
 
     comments: [
       {
@@ -827,20 +832,42 @@ app.get("/api/snippets/search", async (req, res) => {
 
 
 
-// ✅ Fetch Trending Snippets (sorted by likes)
+// ✅ Weekly Trending Snippets (based on likes in the last 7 days)
 app.get("/api/snippets/trending", async (req, res) => {
   try {
-    const trendingSnippets = await Snippet.find({ isPublic: true })
-      .sort({ likes: -1, views: -1, createdAt: -1 }) // most liked, then most viewed, then recent
-      .limit(10) // top 10 trending
-      .lean();
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    res.json(trendingSnippets);
+    // Fetch snippets that are public and created or liked within 7 days
+    const snippets = await Snippet.aggregate([
+      { $match: { isPublic: true } },
+      {
+        $addFields: {
+          recentLikes: {
+            $filter: {
+              input: "$likes",
+              as: "like",
+              cond: { $gte: ["$$like.date", oneWeekAgo] }, // filter likes from last 7 days
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          recentLikesCount: { $size: "$recentLikes" },
+        },
+      },
+      { $sort: { recentLikesCount: -1, createdAt: -1 } },
+      { $limit: 6 },
+    ]);
+
+    res.json(snippets);
   } catch (err) {
-    console.error("Error fetching trending snippets:", err);
+    console.error("🔥 Trending fetch error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
@@ -945,21 +972,36 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     if (!snippet) return res.status(404).json({ error: "Snippet not found" });
 
     const userId = req.userId;
-    const alreadyLiked = snippet.likes.includes(userId);
 
-    if (alreadyLiked) {
-      snippet.likes.pull(userId);
+    // ✅ Check if this user already liked the snippet
+    const existingLikeIndex = snippet.likes.findIndex(
+      (like) => like.userId === userId
+    );
+
+    if (existingLikeIndex !== -1) {
+      // ✅ Unlike (remove like entry)
+      snippet.likes.splice(existingLikeIndex, 1);
     } else {
-      snippet.likes.push(userId);
+      // ✅ Add a new like with timestamp
+      snippet.likes.push({ userId, date: new Date() });
     }
 
     await snippet.save();
-    return res.json(snippet);
+
+    // ✅ Populate only like count & return updated snippet
+    return res.json({
+      _id: snippet._id,
+      likesCount: snippet.likes.length,
+      likes: snippet.likes,
+      message:
+        existingLikeIndex !== -1 ? "Unliked successfully" : "Liked successfully",
+    });
   } catch (err) {
     console.error("like error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 // Add comment
 // Add comment
