@@ -791,7 +791,10 @@ app.get("/api/snippets/search", async (req, res) => {
     const { q } = req.query;
     if (!q) return res.json([]);
 
+    // split query into keywords
     const keywords = q.split(" ").filter(Boolean);
+    if (keywords.length === 0) return res.json([]);
+
     const regexArray = keywords.map((kw) => new RegExp(kw, "i"));
 
     const filter = {
@@ -805,8 +808,11 @@ app.get("/api/snippets/search", async (req, res) => {
       ],
     };
 
-    const snippets = await Snippet.find(filter).sort({ createdAt: -1 }).lean();
-    return res.json(snippets);
+    const snippets = await Snippet.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ snippets });
   } catch (err) {
     console.error("search error:", err);
     res.status(500).json({ error: err.message });
