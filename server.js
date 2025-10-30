@@ -969,28 +969,34 @@ return res.json(updated);
 // ---------------------- EXPLORE SNIPPETS ----------------------
 app.get("/api/snippets/explore", async (req, res) => {
   try {
-    const all = await Snippet.find({ isPublic: true }).sort({ createdAt: -1 });
+    // Fetch all public snippets
+    const allSnippets = await Snippet.find({ isPublic: true })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Group by language
+    // ✅ Trending = most liked (sort by like count using JS)
+    const trending = [...allSnippets]
+      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+      .slice(0, 6);
+
+    // ✅ Recently added = latest snippets
+    const recent = allSnippets.slice(0, 10);
+
+    // ✅ Group by language
     const byLanguage = {};
-    all.forEach((s) => {
-      const lang = s.language || "other";
+    for (const snippet of allSnippets) {
+      const lang = snippet.language?.toLowerCase() || "other";
       if (!byLanguage[lang]) byLanguage[lang] = [];
-      if (byLanguage[lang].length < 10) byLanguage[lang].push(s);
-    });
+      if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
+    }
 
-    const trending = await Snippet.find({ isPublic: true })
-      .sort({ "likes.length": -1 })
-      .limit(6);
-
-    const recent = all.slice(0, 10);
-
-    res.json({ trending, recent, byLanguage });
+    return res.json({ trending, recent, byLanguage });
   } catch (err) {
-    console.error("explore route error:", err);
-    res.status(500).json({ error: "Failed to fetch explore data" });
+    console.error("🔥 Explore route error:", err);
+    return res.status(500).json({ error: "Failed to load explore data" });
   }
 });
+
 
 
 
