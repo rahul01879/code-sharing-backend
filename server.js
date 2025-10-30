@@ -340,6 +340,24 @@ app.get("/api/auth/me", async (req, res) => {
 // =============================================================
 
 
+app.put("/api/user/update", async (req, res) => {
+  try {
+    const userId = req.user.id; // decoded from JWT
+    const { username, bio } = req.body;
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { username, bio },
+      { new: true }
+    ).select("-password");
+
+    res.json({ user: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+
 // ✅ Save + Verify GitHub Token
 // =============================================================
 // =============== USER GITHUB INTEGRATION ======================
