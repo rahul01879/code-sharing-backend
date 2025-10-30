@@ -168,9 +168,32 @@ const collectionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ---------- ACTIVITY SCHEMA ----------
+const activitySchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    username: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ["created", "liked", "deleted", "commented", "edited"],
+      required: true,
+    },
+    snippetId: { type: mongoose.Schema.Types.ObjectId, ref: "Snippet" },
+    snippetTitle: { type: String },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+const Activity = mongoose.model("Activity", activitySchema);
+
+
+
 const User = mongoose.model("User", userSchema);
 const Snippet = mongoose.model("Snippet", snippetSchema);
 const Collection = mongoose.model("Collection", collectionSchema);
+
+
 
 // ---------- DB Connect ----------
 mongoose
@@ -202,6 +225,32 @@ const verifyToken = (req, res, next) => {
     return res.status(401).json({ error: "Invalid / expired token" });
   }
 };
+
+// ---------- Helper: Log Activity ----------
+async function logActivity(userId, username, type, snippet = null) {
+  try {
+    await Activity.create({
+      userId,
+      username,
+      type,
+      snippetId: snippet?._id,
+      snippetTitle: snippet?.title || "",
+    });
+
+    // Optional: Keep only last 50 records per user
+    const count = await Activity.countDocuments({ userId });
+    if (count > 50) {
+      const oldest = await Activity.find({ userId })
+        .sort({ createdAt: 1 })
+        .limit(count - 50)
+        .select("_id");
+      await Activity.deleteMany({ _id: { $in: oldest.map((a) => a._id) } });
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to log activity:", err.message);
+  }
+}
+
 
 // ---------- Admin middleware ----------
 const verifyAdmin = (req, res, next) => {
@@ -772,6 +821,7 @@ app.post("/api/snippets", verifyToken, async (req, res) => {
     });
 
     await snippet.save();
+    await logActivity(req.userId, user.username, "created", snippet);
     return res.status(201).json(snippet);
   } catch (err) {
     console.error("create snippet error:", err);
@@ -988,6 +1038,8 @@ app.delete("/api/snippets/:id", verifyToken, async (req, res) => {
 
     await Snippet.findByIdAndDelete(req.params.id);
     return res.json({ message: "Snippet deleted" });
+    await logActivity(req.userId, user.username, "deleted", snippet);
+
   } catch (err) {
     console.error("delete snippet error:", err);
     return res.status(500).json({ error: err.message });
@@ -1030,6 +1082,8 @@ const updated = await Snippet.findByIdAndUpdate(
 );
 
 return res.json(updated);
+await logActivity(req.userId, user.username, "edited", updated);
+
 
   } catch (err) {
     console.error("update snippet error:", err);
@@ -1062,6 +1116,7 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     }
 
     await snippet.save();
+    await logActivity(req.userId, user.username, existingLikeIndex !== -1 ? "unliked" : "liked", snippet);
 
     // ✅ Populate only like count & return updated snippet
     return res.json({
@@ -1098,6 +1153,7 @@ app.post("/api/snippets/:id/comments", verifyToken, async (req, res) => {
     });
 
     await snippet.save();
+    await logActivity(req.userId, user.username, "commented", snippet);
     return res.json(snippet);
   } catch (err) {
     console.error("comment error:", err);
@@ -1287,6 +1343,26 @@ app.get("/api/snippets/tag/:tag", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+
+// ================== ACTIVITY ROUTES ==================
+app.get("/api/activity/mine", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).lean();
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    const activities = await Activity.find({ userId: req.userId })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    res.json(activities);
+  } catch (err) {
+    console.error("activity fetch error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
