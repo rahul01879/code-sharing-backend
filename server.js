@@ -967,56 +967,56 @@ return res.json(updated);
 
 
 // ---------------------- EXPLORE SNIPPETS ----------------------
+// ✅ Explore Snippets Route
 app.get("/api/snippets/explore", async (req, res) => {
   try {
-    console.log("📥 /api/snippets/explore endpoint hit");
+    console.log("📥 Explore API called");
 
-    // Fetch all public snippets
-    const allSnippets = await Snippet.find({ isPublic: true })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    console.log(`✅ Found ${allSnippets?.length || 0} public snippets`);
+    // Fetch all public snippets safely
+    const allSnippets = await Snippet.find({ isPublic: true }).lean();
 
     if (!Array.isArray(allSnippets)) {
-      console.log("⚠️ allSnippets is not an array:", allSnippets);
-      return res.json({ trending: [], recent: [], byLanguage: {} });
+      console.warn("⚠️ allSnippets is not an array");
+      return res.status(200).json({ trending: [], recent: [], byLanguage: {} });
     }
 
-    // Trending (Top liked)
-    const trending = allSnippets
+    console.log(`✅ Found ${allSnippets.length} public snippets`);
+
+    // Trending snippets = most liked
+    const trending = [...allSnippets]
       .filter((s) => Array.isArray(s.likes))
       .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
       .slice(0, 6);
 
-    // Recent
-    const recent = allSnippets.slice(0, 10);
+    // Recent snippets = newest
+    const recent = [...allSnippets]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10);
 
-    // Group by language
+    // Group snippets by language
     const byLanguage = {};
-    for (const s of allSnippets) {
-      const lang = (s.language || "other").toLowerCase();
+    for (const snippet of allSnippets) {
+      const lang = (snippet.language || "other").toLowerCase();
       if (!byLanguage[lang]) byLanguage[lang] = [];
       if (byLanguage[lang].length < 10) {
-        byLanguage[lang].push(s);
+        byLanguage[lang].push(snippet);
       }
     }
 
-    console.log("📊 Explore data prepared successfully");
-
-    return res.status(200).json({
+    // ✅ Always respond with safe structure
+    res.status(200).json({
       trending,
       recent,
       byLanguage,
     });
   } catch (err) {
-    console.error("🔥 Explore route crash:", err);
-    return res
-      .status(500)
-      .json({ error: err.message || "Failed to load explore data" });
+    console.error("🔥 Explore route error:", err);
+    res.status(500).json({
+      error: err.message || "Server error while fetching explore data",
+      details: err.stack,
+    });
   }
 });
-
 
 
 
