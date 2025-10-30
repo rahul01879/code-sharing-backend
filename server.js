@@ -969,20 +969,21 @@ return res.json(updated);
 // ---------------------- EXPLORE SNIPPETS ----------------------
 app.get("/api/snippets/explore", async (req, res) => {
   try {
-    // Fetch all public snippets
+    // Fetch all public snippets safely
     const allSnippets = await Snippet.find({ isPublic: true })
       .sort({ createdAt: -1 })
       .lean();
 
-    // ✅ Trending = most liked (sort by like count using JS)
+    // ✅ 1. Trending (sorted by number of likes)
     const trending = [...allSnippets]
-      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+      .filter(s => Array.isArray(s.likes))
+      .sort((a, b) => b.likes.length - a.likes.length)
       .slice(0, 6);
 
-    // ✅ Recently added = latest snippets
+    // ✅ 2. Recently added
     const recent = allSnippets.slice(0, 10);
 
-    // ✅ Group by language
+    // ✅ 3. Group snippets by language
     const byLanguage = {};
     for (const snippet of allSnippets) {
       const lang = snippet.language?.toLowerCase() || "other";
@@ -990,12 +991,17 @@ app.get("/api/snippets/explore", async (req, res) => {
       if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
     }
 
-    return res.json({ trending, recent, byLanguage });
+    return res.json({
+      trending,
+      recent,
+      byLanguage,
+    });
   } catch (err) {
     console.error("🔥 Explore route error:", err);
-    return res.status(500).json({ error: "Failed to load explore data" });
+    return res.status(500).json({ error: err.message || "Failed to load explore data" });
   }
 });
+
 
 
 
