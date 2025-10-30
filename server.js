@@ -969,38 +969,48 @@ return res.json(updated);
 // ---------------------- EXPLORE SNIPPETS ----------------------
 app.get("/api/snippets/explore", async (req, res) => {
   try {
-    // Fetch all public snippets safely
+    // ✅ Fetch all public snippets
     const allSnippets = await Snippet.find({ isPublic: true })
       .sort({ createdAt: -1 })
       .lean();
 
-    // ✅ 1. Trending (sorted by number of likes)
-    const trending = [...allSnippets]
-      .filter(s => Array.isArray(s.likes))
-      .sort((a, b) => b.likes.length - a.likes.length)
-      .slice(0, 6);
-
-    // ✅ 2. Recently added
-    const recent = allSnippets.slice(0, 10);
-
-    // ✅ 3. Group snippets by language
-    const byLanguage = {};
-    for (const snippet of allSnippets) {
-      const lang = snippet.language?.toLowerCase() || "other";
-      if (!byLanguage[lang]) byLanguage[lang] = [];
-      if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
+    if (!Array.isArray(allSnippets)) {
+      return res.json({ trending: [], recent: [], byLanguage: {} });
     }
 
-    return res.json({
+    // ✅ Trending (Top liked)
+    const trending = allSnippets
+      .filter((s) => Array.isArray(s.likes))
+      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+      .slice(0, 6);
+
+    // ✅ Recently added
+    const recent = allSnippets.slice(0, 10);
+
+    // ✅ Group by language safely
+    const byLanguage = {};
+    for (const s of allSnippets) {
+      const lang = (s.language || "other").toLowerCase();
+      if (!byLanguage[lang]) byLanguage[lang] = [];
+      if (byLanguage[lang].length < 10) {
+        byLanguage[lang].push(s);
+      }
+    }
+
+    // ✅ Return safe response
+    return res.status(200).json({
       trending,
       recent,
       byLanguage,
     });
   } catch (err) {
-    console.error("🔥 Explore route error:", err);
-    return res.status(500).json({ error: err.message || "Failed to load explore data" });
+    console.error("🔥 Explore route crash:", err);
+    return res
+      .status(500)
+      .json({ error: err.message || "Failed to load explore data" });
   }
 });
+
 
 
 
