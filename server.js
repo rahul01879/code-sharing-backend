@@ -869,7 +869,59 @@ app.get("/api/snippets/trending", async (req, res) => {
 });
 
 
+// ---------------------- EXPLORE SNIPPETS (Safe + Optimized) ----------------------
+app.get("/api/snippets/explore", async (req, res) => {
+  try {
+    console.log("📥 [Explore] API called");
 
+    // Limit and select only useful fields to improve performance
+    const allSnippets = await Snippet.find({ isPublic: true })
+      .select("title description language likes createdAt author tags")
+      .limit(500) // prevent excessive load if DB is large
+      .lean();
+
+    if (!allSnippets || allSnippets.length === 0) {
+      console.log("⚠️ No public snippets found!");
+      return res.json({ trending: [], recent: [], byLanguage: {} });
+    }
+
+    console.log("✅ Total public snippets:", allSnippets.length);
+
+    // --- Trending Snippets (by likes count) ---
+    const trending = allSnippets
+      .filter((s) => Array.isArray(s.likes))
+      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+      .slice(0, 6);
+
+    // --- Recent Snippets (by creation date) ---
+    const recent = allSnippets
+      .filter((s) => s?.createdAt)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10);
+
+    // --- Group by Language (case-insensitive) ---
+    const byLanguage = {};
+    for (const snippet of allSnippets) {
+      try {
+        // Safely handle invalid or non-string language fields
+        const lang = snippet?.language
+          ? String(snippet.language).toLowerCase()
+          : "other";
+
+        if (!byLanguage[lang]) byLanguage[lang] = [];
+        if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
+      } catch (innerErr) {
+        console.warn("⚠️ Failed to group snippet:", snippet._id, innerErr.message);
+      }
+    }
+
+    console.log("🔥 Trending:", trending.length, "🆕 Recent:", recent.length);
+    res.json({ trending, recent, byLanguage });
+  } catch (err) {
+    console.error("❌ [Explore] route error:", err.message);
+    res.status(500).json({ error: "Internal server error in /api/snippets/explore" });
+  }
+});
 
 
 // Current user's snippets
@@ -964,68 +1016,6 @@ return res.json(updated);
 
 
 // ================== SNIPPET EXTRAS ==================
-
-
-// ---------------------- EXPLORE SNIPPETS (Safe + Optimized) ----------------------
-app.get("/api/snippets/explore", async (req, res) => {
-  try {
-    console.log("📥 [Explore] API called");
-
-    // Limit and select only useful fields to improve performance
-    const allSnippets = await Snippet.find({ isPublic: true })
-      .select("title description language likes createdAt author tags")
-      .limit(500) // prevent excessive load if DB is large
-      .lean();
-
-    if (!allSnippets || allSnippets.length === 0) {
-      console.log("⚠️ No public snippets found!");
-      return res.json({ trending: [], recent: [], byLanguage: {} });
-    }
-
-    console.log("✅ Total public snippets:", allSnippets.length);
-
-    // --- Trending Snippets (by likes count) ---
-    const trending = allSnippets
-      .filter((s) => Array.isArray(s.likes))
-      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
-      .slice(0, 6);
-
-    // --- Recent Snippets (by creation date) ---
-    const recent = allSnippets
-      .filter((s) => s?.createdAt)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10);
-
-    // --- Group by Language (case-insensitive) ---
-    const byLanguage = {};
-    for (const snippet of allSnippets) {
-      try {
-        // Safely handle invalid or non-string language fields
-        const lang = snippet?.language
-          ? String(snippet.language).toLowerCase()
-          : "other";
-
-        if (!byLanguage[lang]) byLanguage[lang] = [];
-        if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
-      } catch (innerErr) {
-        console.warn("⚠️ Failed to group snippet:", snippet._id, innerErr.message);
-      }
-    }
-
-    console.log("🔥 Trending:", trending.length, "🆕 Recent:", recent.length);
-    res.json({ trending, recent, byLanguage });
-  } catch (err) {
-    console.error("❌ [Explore] route error:", err.message);
-    res.status(500).json({ error: "Internal server error in /api/snippets/explore" });
-  }
-});
-
-
-
-
-
-
-
 
 // Like / Unlike
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
