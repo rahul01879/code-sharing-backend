@@ -969,25 +969,30 @@ return res.json(updated);
 // ---------------------- EXPLORE SNIPPETS ----------------------
 app.get("/api/snippets/explore", async (req, res) => {
   try {
-    // ✅ Fetch all public snippets
+    console.log("📥 /api/snippets/explore endpoint hit");
+
+    // Fetch all public snippets
     const allSnippets = await Snippet.find({ isPublic: true })
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log(`✅ Found ${allSnippets?.length || 0} public snippets`);
+
     if (!Array.isArray(allSnippets)) {
+      console.log("⚠️ allSnippets is not an array:", allSnippets);
       return res.json({ trending: [], recent: [], byLanguage: {} });
     }
 
-    // ✅ Trending (Top liked)
+    // Trending (Top liked)
     const trending = allSnippets
       .filter((s) => Array.isArray(s.likes))
       .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
       .slice(0, 6);
 
-    // ✅ Recently added
+    // Recent
     const recent = allSnippets.slice(0, 10);
 
-    // ✅ Group by language safely
+    // Group by language
     const byLanguage = {};
     for (const s of allSnippets) {
       const lang = (s.language || "other").toLowerCase();
@@ -997,7 +1002,8 @@ app.get("/api/snippets/explore", async (req, res) => {
       }
     }
 
-    // ✅ Return safe response
+    console.log("📊 Explore data prepared successfully");
+
     return res.status(200).json({
       trending,
       recent,
@@ -1010,6 +1016,7 @@ app.get("/api/snippets/explore", async (req, res) => {
       .json({ error: err.message || "Failed to load explore data" });
   }
 });
+
 
 
 
