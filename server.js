@@ -965,6 +965,37 @@ return res.json(updated);
 
 // ================== SNIPPET EXTRAS ==================
 
+
+app.get("/api/snippets/explore", async (req, res) => {
+  try {
+    const trending = await Snippet.find({ isPublic: true })
+      .sort({ likes: -1 })
+      .limit(6)
+      .lean();
+
+    const recent = await Snippet.find({ isPublic: true })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean();
+
+    const languages = ["javascript", "python", "java", "php"];
+    const byLanguage = {};
+    for (const lang of languages) {
+      byLanguage[lang] = await Snippet.find({ isPublic: true, language: lang })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .lean();
+    }
+
+    res.json({ trending, recent, byLanguage });
+  } catch (err) {
+    console.error("explore fetch error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // Like / Unlike
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
