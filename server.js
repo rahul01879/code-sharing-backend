@@ -869,15 +869,15 @@ app.get("/api/snippets/trending", async (req, res) => {
 });
 
 
-// ---------------------- EXPLORE SNIPPETS (Safe + Optimized) ----------------------
+// ---------------------- EXPLORE SNIPPETS (Improved: Likes + Views Ranking) ----------------------
 app.get("/api/snippets/explore", async (req, res) => {
   try {
     console.log("📥 [Explore] API called");
 
-    // Limit and select only useful fields to improve performance
+    // Limit & select only required fields for performance
     const allSnippets = await Snippet.find({ isPublic: true })
-      .select("title description language likes createdAt author tags")
-      .limit(500) // prevent excessive load if DB is large
+      .select("title description language likes views createdAt author tags")
+      .limit(500)
       .lean();
 
     if (!allSnippets || allSnippets.length === 0) {
@@ -887,27 +887,28 @@ app.get("/api/snippets/explore", async (req, res) => {
 
     console.log("✅ Total public snippets:", allSnippets.length);
 
-    // --- Trending Snippets (by likes count) ---
+    // --- Trending Snippets (weighted by likes + views) ---
     const trending = allSnippets
-      .filter((s) => Array.isArray(s.likes))
-      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
-      .slice(0, 6);
+      .map((s) => ({
+        ...s,
+        popularityScore: (s.likes?.length || 0) * 2 + (s.views || 0) * 0.5, // weighted
+      }))
+      .sort((a, b) => b.popularityScore - a.popularityScore)
+      .slice(0, 8); // top 8 trending
 
     // --- Recent Snippets (by creation date) ---
     const recent = allSnippets
       .filter((s) => s?.createdAt)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10);
+      .slice(0, 12);
 
     // --- Group by Language (case-insensitive) ---
     const byLanguage = {};
     for (const snippet of allSnippets) {
       try {
-        // Safely handle invalid or non-string language fields
         const lang = snippet?.language
           ? String(snippet.language).toLowerCase()
           : "other";
-
         if (!byLanguage[lang]) byLanguage[lang] = [];
         if (byLanguage[lang].length < 10) byLanguage[lang].push(snippet);
       } catch (innerErr) {
@@ -915,13 +916,17 @@ app.get("/api/snippets/explore", async (req, res) => {
       }
     }
 
-    console.log("🔥 Trending:", trending.length, "🆕 Recent:", recent.length);
+    console.log(
+      `🔥 Trending: ${trending.length}, 🆕 Recent: ${recent.length}, 🌐 Languages: ${Object.keys(byLanguage).length}`
+    );
+
     res.json({ trending, recent, byLanguage });
   } catch (err) {
     console.error("❌ [Explore] route error:", err.message);
     res.status(500).json({ error: "Internal server error in /api/snippets/explore" });
   }
 });
+
 
 
 // Current user's snippets
