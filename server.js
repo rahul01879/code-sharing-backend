@@ -1095,7 +1095,6 @@ await logActivity(req.userId, user.username, "edited", updated);
 // ================== SNIPPET EXTRAS ==================
 
 // Like / Unlike
-// ✅ Like / Unlike Snippet
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
     const snippet = await Snippet.findById(req.params.id);
@@ -1104,33 +1103,33 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized user" });
 
-    // ✅ Fetch user info for logging
+    // Get username for activity
     const user = await User.findById(userId).select("username");
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // ✅ Check if this user already liked the snippet
+    // 🔧 FIXED: no toString()
     const existingLikeIndex = snippet.likes.findIndex(
-      (like) => like.userId.toString() === userId
+      (like) => like.userId === userId
     );
 
     let action;
     if (existingLikeIndex !== -1) {
-      // ✅ Unlike (remove like entry)
       snippet.likes.splice(existingLikeIndex, 1);
       action = "unliked";
     } else {
-      // ✅ Add a new like with timestamp
       snippet.likes.push({ userId, date: new Date() });
       action = "liked";
     }
 
     await snippet.save();
 
-    // ✅ Log activity safely
-    await logActivity(userId, user.username, action, snippet);
+    try {
+      await logActivity(userId, user.username, action, snippet);
+    } catch (err) {
+      console.warn("⚠️ Activity log failed:", err.message);
+    }
 
-    // ✅ Return updated info
-    return res.json({
+    res.json({
       success: true,
       message: `Snippet ${action} successfully`,
       likesCount: snippet.likes.length,
@@ -1138,7 +1137,7 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ like error:", err);
-    return res.status(500).json({ error: "Internal server error in like route" });
+    res.status(500).json({ error: "Internal server error in like route" });
   }
 });
 
