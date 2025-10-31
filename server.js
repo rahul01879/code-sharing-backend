@@ -1095,42 +1095,53 @@ await logActivity(req.userId, user.username, "edited", updated);
 // ================== SNIPPET EXTRAS ==================
 
 // Like / Unlike
+// ✅ Like / Unlike Snippet
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
     const snippet = await Snippet.findById(req.params.id);
     if (!snippet) return res.status(404).json({ error: "Snippet not found" });
 
     const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized user" });
+
+    // ✅ Fetch user info for logging
+    const user = await User.findById(userId).select("username");
+    if (!user) return res.status(404).json({ error: "User not found" });
 
     // ✅ Check if this user already liked the snippet
     const existingLikeIndex = snippet.likes.findIndex(
-      (like) => like.userId === userId
+      (like) => like.userId.toString() === userId
     );
 
+    let action;
     if (existingLikeIndex !== -1) {
       // ✅ Unlike (remove like entry)
       snippet.likes.splice(existingLikeIndex, 1);
+      action = "unliked";
     } else {
       // ✅ Add a new like with timestamp
       snippet.likes.push({ userId, date: new Date() });
+      action = "liked";
     }
 
     await snippet.save();
-    await logActivity(req.userId, user.username, existingLikeIndex !== -1 ? "unliked" : "liked", snippet);
 
-    // ✅ Populate only like count & return updated snippet
+    // ✅ Log activity safely
+    await logActivity(userId, user.username, action, snippet);
+
+    // ✅ Return updated info
     return res.json({
-      _id: snippet._id,
+      success: true,
+      message: `Snippet ${action} successfully`,
       likesCount: snippet.likes.length,
       likes: snippet.likes,
-      message:
-        existingLikeIndex !== -1 ? "Unliked successfully" : "Liked successfully",
     });
   } catch (err) {
-    console.error("like error:", err);
-    return res.status(500).json({ error: err.message });
+    console.error("❌ like error:", err);
+    return res.status(500).json({ error: "Internal server error in like route" });
   }
 });
+
 
 
 // Add comment
