@@ -138,8 +138,8 @@ const snippetSchema = new mongoose.Schema(
     tags: [{ type: String, trim: true, lowercase: true }],
      likes: [
       {
-        userId: { type: String, required: true },
-        date: { type: Date, default: Date.now },
+         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+         date: { type: Date, default: Date.now },
       },
     ],
 
@@ -1094,50 +1094,35 @@ await logActivity(req.userId, user.username, "edited", updated);
 
 // ================== SNIPPET EXTRAS ==================
 
-// Like / Unlike
+// ✅ Like / Unlike Snippet
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
-    console.log("📩 Like API called with snippet ID:", req.params.id);
-    console.log("👤 Auth user ID:", req.userId);
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized user" });
 
     const snippet = await Snippet.findById(req.params.id);
-    if (!snippet) {
-      console.log("❌ Snippet not found for ID:", req.params.id);
-      return res.status(404).json({ error: "Snippet not found" });
-    }
+    if (!snippet) return res.status(404).json({ error: "Snippet not found" });
 
-    const userId = req.userId;
-    if (!userId) {
-      console.log("❌ Missing userId from token!");
-      return res.status(401).json({ error: "Unauthorized user" });
-    }
+    const user = await User.findById(userId).select("username email");
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    const user = await User.findById(userId).select("username");
-    if (!user) {
-      console.log("❌ User not found in DB:", userId);
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    console.log("✅ Found user:", user.username);
-
+    // Check if already liked
     const existingLikeIndex = snippet.likes.findIndex(
       (like) => String(like.userId) === String(userId)
     );
-
-    console.log("👉 Existing like index:", existingLikeIndex);
 
     let action;
     if (existingLikeIndex !== -1) {
       snippet.likes.splice(existingLikeIndex, 1);
       action = "unliked";
     } else {
-      snippet.likes.push({ userId, date: new Date() });
+      snippet.likes.push({ userId });
       action = "liked";
     }
 
     await snippet.save();
-    console.log(`💾 Snippet ${action} successfully for user ${user.username}`);
 
+    // Optional: log user activity if you want
     try {
       await logActivity(userId, user.username, action, snippet);
     } catch (err) {
@@ -1151,7 +1136,7 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
       likes: snippet.likes,
     });
   } catch (err) {
-    console.error("🔥 Like route server error:", err);
+    console.error("🔥 Like route error:", err);
     res.status(500).json({ error: "Internal server error in like route" });
   }
 });
@@ -1511,6 +1496,35 @@ app.delete("/api/collections/:id", verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ⚠️ TEMPORARY MIGRATION ROUTE
+app.get("/api/dev/fix-likes", async (req, res) => {
+  try {
+    const result = await Snippet.updateMany(
+      { "likes.0": { $type: "string" } },
+      [
+        {
+          $set: {
+            likes: {
+              $map: {
+                input: "$likes",
+                as: "like",
+                in: { userId: { $toObjectId: "$$like" }, date: new Date() },
+              },
+            },
+          },
+        },
+      ]
+    );
+
+    res.json({ success: true, modified: result.modifiedCount });
+  } catch (err) {
+    console.error("❌ Migration failed:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 // ---------- Start ----------
 const PORT = process.env.PORT || 5000;
