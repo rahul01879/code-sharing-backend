@@ -1097,22 +1097,39 @@ await logActivity(req.userId, user.username, "edited", updated);
 // Like / Unlike
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
+    console.log("📩 Like API called for snippet:", req.params.id);
+    console.log("👤 Authenticated User ID:", req.userId);
+
     const snippet = await Snippet.findById(req.params.id);
-    if (!snippet) return res.status(404).json({ error: "Snippet not found" });
+    if (!snippet) {
+      console.log("❌ Snippet not found");
+      return res.status(404).json({ error: "Snippet not found" });
+    }
 
     const userId = req.userId;
-    if (!userId) return res.status(401).json({ error: "Unauthorized user" });
+    if (!userId) {
+      console.log("❌ Missing userId in token");
+      return res.status(401).json({ error: "Unauthorized user" });
+    }
 
-    // ✅ Fetch username for logging
     const user = await User.findById(userId).select("username");
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      console.log("❌ User not found in DB");
+      return res.status(404).json({ error: "User not found" });
+    }
 
-    // ✅ Check if already liked (convert toString for ObjectId safety)
+    console.log("✅ User verified:", user.username);
+
+    // Ensure snippet.likes is always an array
+    if (!Array.isArray(snippet.likes)) {
+      console.log("⚠️ Likes field was not an array. Resetting...");
+      snippet.likes = [];
+    }
+
     const existingLikeIndex = snippet.likes.findIndex(
-      (like) => like.userId.toString() === userId.toString()
+      (like) => like.userId?.toString() === userId.toString()
     );
 
-    // ✅ Toggle like/unlike
     let action;
     if (existingLikeIndex !== -1) {
       snippet.likes.splice(existingLikeIndex, 1);
@@ -1123,23 +1140,22 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     }
 
     await snippet.save();
+    console.log(`💾 Snippet ${action}:`, snippet.likes.length, "likes now");
 
-    // ✅ Log the activity but don’t break if logging fails
     try {
       await logActivity(userId, user.username, action, snippet);
     } catch (err) {
-      console.warn("⚠️ Activity log failed:", err.message);
+      console.warn("⚠️ Failed to log activity:", err.message);
     }
 
-    // ✅ Send updated data back
-    res.status(200).json({
+    res.json({
       success: true,
       message: `Snippet ${action} successfully`,
       likesCount: snippet.likes.length,
       likes: snippet.likes,
     });
   } catch (err) {
-    console.error("❌ like error:", err);
+    console.error("🔥 Like route server error:", err);
     res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
