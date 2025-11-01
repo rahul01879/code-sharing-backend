@@ -1497,32 +1497,6 @@ app.delete("/api/collections/:id", verifyToken, async (req, res) => {
   }
 });
 
-// ⚠️ TEMPORARY MIGRATION ROUTE
-app.get("/api/dev/fix-likes", async (req, res) => {
-  try {
-    const result = await Snippet.updateMany(
-      { "likes.0": { $type: "string" } },
-      [
-        {
-          $set: {
-            likes: {
-              $map: {
-                input: "$likes",
-                as: "like",
-                in: { userId: { $toObjectId: "$$like" }, date: new Date() },
-              },
-            },
-          },
-        },
-      ]
-    );
-
-    res.json({ success: true, modified: result.modifiedCount });
-  } catch (err) {
-    console.error("❌ Migration failed:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 
 
