@@ -1497,6 +1497,7 @@ app.delete("/api/collections/:id", verifyToken, async (req, res) => {
   }
 });
 
+app.get("/ping", (req, res) => res.send("pong"));
 
 
 
