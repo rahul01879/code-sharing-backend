@@ -1097,38 +1097,34 @@ await logActivity(req.userId, user.username, "edited", updated);
 // Like / Unlike
 app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   try {
-    console.log("📩 Like API called for snippet:", req.params.id);
-    console.log("👤 Authenticated User ID:", req.userId);
+    console.log("📩 Like API called with snippet ID:", req.params.id);
+    console.log("👤 Auth user ID:", req.userId);
 
     const snippet = await Snippet.findById(req.params.id);
     if (!snippet) {
-      console.log("❌ Snippet not found");
+      console.log("❌ Snippet not found for ID:", req.params.id);
       return res.status(404).json({ error: "Snippet not found" });
     }
 
     const userId = req.userId;
     if (!userId) {
-      console.log("❌ Missing userId in token");
+      console.log("❌ Missing userId from token!");
       return res.status(401).json({ error: "Unauthorized user" });
     }
 
     const user = await User.findById(userId).select("username");
     if (!user) {
-      console.log("❌ User not found in DB");
+      console.log("❌ User not found in DB:", userId);
       return res.status(404).json({ error: "User not found" });
     }
 
-    console.log("✅ User verified:", user.username);
-
-    // Ensure snippet.likes is always an array
-    if (!Array.isArray(snippet.likes)) {
-      console.log("⚠️ Likes field was not an array. Resetting...");
-      snippet.likes = [];
-    }
+    console.log("✅ Found user:", user.username);
 
     const existingLikeIndex = snippet.likes.findIndex(
-      (like) => like.userId?.toString() === userId.toString()
+      (like) => String(like.userId) === String(userId)
     );
+
+    console.log("👉 Existing like index:", existingLikeIndex);
 
     let action;
     if (existingLikeIndex !== -1) {
@@ -1140,12 +1136,12 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     }
 
     await snippet.save();
-    console.log(`💾 Snippet ${action}:`, snippet.likes.length, "likes now");
+    console.log(`💾 Snippet ${action} successfully for user ${user.username}`);
 
     try {
       await logActivity(userId, user.username, action, snippet);
     } catch (err) {
-      console.warn("⚠️ Failed to log activity:", err.message);
+      console.warn("⚠️ Activity log failed:", err.message);
     }
 
     res.json({
@@ -1156,9 +1152,10 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     });
   } catch (err) {
     console.error("🔥 Like route server error:", err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Internal server error in like route" });
   }
 });
+
 
 
 
