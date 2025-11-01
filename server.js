@@ -1103,15 +1103,16 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized user" });
 
-    // Get username for activity
+    // ✅ Fetch username for logging
     const user = await User.findById(userId).select("username");
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 🔧 FIXED: no toString()
+    // ✅ Check if already liked (convert toString for ObjectId safety)
     const existingLikeIndex = snippet.likes.findIndex(
-      (like) => like.userId === userId
+      (like) => like.userId.toString() === userId.toString()
     );
 
+    // ✅ Toggle like/unlike
     let action;
     if (existingLikeIndex !== -1) {
       snippet.likes.splice(existingLikeIndex, 1);
@@ -1123,13 +1124,15 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
 
     await snippet.save();
 
+    // ✅ Log the activity but don’t break if logging fails
     try {
       await logActivity(userId, user.username, action, snippet);
     } catch (err) {
       console.warn("⚠️ Activity log failed:", err.message);
     }
 
-    res.json({
+    // ✅ Send updated data back
+    res.status(200).json({
       success: true,
       message: `Snippet ${action} successfully`,
       likesCount: snippet.likes.length,
@@ -1137,7 +1140,7 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ like error:", err);
-    res.status(500).json({ error: "Internal server error in like route" });
+    res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
 
