@@ -1141,6 +1141,30 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   }
 });
 
+// ✅ Fork Snippet
+app.post("/api/snippets/:id/fork", verifyToken, async (req, res) => {
+  try {
+    const original = await Snippet.findById(req.params.id);
+    if (!original) return res.status(404).json({ error: "Snippet not found" });
+
+    const newSnippet = new Snippet({
+      title: `${original.title} (forked)`,
+      description: original.description,
+      language: original.language,
+      code: original.code,
+      author: req.userId,
+      tags: original.tags,
+      isPublic: true,
+    });
+
+    await newSnippet.save();
+
+    res.json(newSnippet);
+  } catch (err) {
+    console.error("Fork error:", err);
+    res.status(500).json({ error: "Error forking snippet" });
+  }
+});
 
 
 
