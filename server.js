@@ -1141,27 +1141,39 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   }
 });
 
-// ✅ Fork Snippet
+// ✅ Fork Snippet (includes username)
 app.post("/api/snippets/:id/fork", verifyToken, async (req, res) => {
   try {
     const original = await Snippet.findById(req.params.id);
     if (!original) return res.status(404).json({ error: "Snippet not found" });
 
+    // 🧠 Fetch user info (assuming you have a User model)
+    const user = await User.findById(req.userId).select("username email");
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // 🪄 Create the forked snippet
     const newSnippet = new Snippet({
       title: `${original.title} (forked)`,
       description: original.description,
       language: original.language,
       code: original.code,
-      author: req.userId,
+      author: user.username, // ✅ Show username instead of just userId
+      authorId: user._id, // ✅ Keep reference if needed
       tags: original.tags,
       isPublic: true,
+      forkedFrom: original._id, // ✅ Optional but useful for tracking source
+      forkedAt: new Date(),
     });
 
     await newSnippet.save();
 
-    res.json(newSnippet);
+    res.json({
+      message: "✅ Snippet forked successfully",
+      snippet: newSnippet,
+    });
   } catch (err) {
-    console.error("Fork error:", err);
+    console.error("❌ Fork error:", err);
     res.status(500).json({ error: "Error forking snippet" });
   }
 });
