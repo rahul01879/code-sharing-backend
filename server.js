@@ -134,17 +134,12 @@ const snippetSchema = new mongoose.Schema(
     language: { type: String, default: "javascript", lowercase: true, trim: true },
     code: { type: String, default: "" },
 
-    // 👤 Author Info
-    author: { type: String, required: true }, // username
+    author: { type: String, required: true },
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
-    // 🌍 Public / Private visibility
     isPublic: { type: Boolean, default: true, index: true },
-
-    // 🏷️ Tags
     tags: [{ type: String, trim: true, lowercase: true }],
 
-    // ❤️ Likes
     likes: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -152,7 +147,6 @@ const snippetSchema = new mongoose.Schema(
       },
     ],
 
-    // 💬 Comments
     comments: [
       {
         user: { type: String, required: true },
@@ -161,16 +155,16 @@ const snippetSchema = new mongoose.Schema(
       },
     ],
 
-    // 👁️ Views
     views: { type: Number, default: 0 },
     viewedBy: [{ type: mongoose.Schema.Types.Mixed }],
 
-    // 🔱 Fork Info
+    // ✅ New fields for fork system
     forkedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "Snippet", default: null },
     forkedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
 
 const collectionSchema = new mongoose.Schema(
   {
@@ -1158,7 +1152,7 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
 // ✅ Improved Fork Route — shows username and stays private
 app.post("/api/snippets/:id/fork", verifyToken, async (req, res) => {
   try {
-    const original = await Snippet.findById(req.params.id);
+    const original = await Snippet.findById(req.params.id).populate("authorId", "username");
     if (!original) return res.status(404).json({ error: "Snippet not found" });
 
     const user = await User.findById(req.userId).select("username");
@@ -1169,17 +1163,18 @@ app.post("/api/snippets/:id/fork", verifyToken, async (req, res) => {
       description: original.description,
       language: original.language,
       code: original.code,
-
-      author: user.username,          // ✅ Use username, not ID
-      authorId: req.userId,           // ✅ Save ID separately
+      author: user.username,
+      authorId: req.userId,
       tags: original.tags,
-      isPublic: false,                // ✅ Keep fork private by default
-
-      forkedFrom: original._id,       // ✅ Link to original
-      forkedAt: new Date(),           // ✅ Timestamp
+      isPublic: false, // keep it private
+      forkedFrom: original._id, // link parent
+      forkedAt: new Date(),
     });
 
     await newSnippet.save();
+
+    // Populate forkedFrom for frontend display
+    await newSnippet.populate("forkedFrom", "title author");
 
     res.json({
       message: "Snippet forked successfully",
