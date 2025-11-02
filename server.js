@@ -133,16 +133,26 @@ const snippetSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     language: { type: String, default: "javascript", lowercase: true, trim: true },
     code: { type: String, default: "" },
-    author: { type: String, required: true },
+
+    // 👤 Author Info
+    author: { type: String, required: true }, // username
+    authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+    // 🌍 Public / Private visibility
     isPublic: { type: Boolean, default: true, index: true },
+
+    // 🏷️ Tags
     tags: [{ type: String, trim: true, lowercase: true }],
-     likes: [
+
+    // ❤️ Likes
+    likes: [
       {
-         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-         date: { type: Date, default: Date.now },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        date: { type: Date, default: Date.now },
       },
     ],
 
+    // 💬 Comments
     comments: [
       {
         user: { type: String, required: true },
@@ -151,9 +161,13 @@ const snippetSchema = new mongoose.Schema(
       },
     ],
 
-    
+    // 👁️ Views
     views: { type: Number, default: 0 },
-    viewedBy: [{ type: mongoose.Schema.Types.Mixed }], 
+    viewedBy: [{ type: mongoose.Schema.Types.Mixed }],
+
+    // 🔱 Fork Info
+    forkedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "Snippet", default: null },
+    forkedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
