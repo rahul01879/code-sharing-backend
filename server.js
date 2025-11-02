@@ -957,7 +957,7 @@ app.get("/api/snippets/explore", async (req, res) => {
     console.log("📥 [Explore] API called");
 
     // Limit & select only required fields for performance
-    const allSnippets = await Snippet.find({ isPublic: true })
+    const allSnippets = await Snippet.find({ isPublic: true, forkedFrom: null })
       .select("title description language likes views createdAt author tags")
       .limit(500)
       .lean();
@@ -1155,42 +1155,42 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
   }
 });
 
-// ✅ Fork Snippet (includes username)
+// ✅ Improved Fork Route — shows username and stays private
 app.post("/api/snippets/:id/fork", verifyToken, async (req, res) => {
   try {
     const original = await Snippet.findById(req.params.id);
     if (!original) return res.status(404).json({ error: "Snippet not found" });
 
-    // 🧠 Fetch user info (assuming you have a User model)
-    const user = await User.findById(req.userId).select("username email");
-
+    const user = await User.findById(req.userId).select("username");
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 🪄 Create the forked snippet
     const newSnippet = new Snippet({
       title: `${original.title} (forked)`,
       description: original.description,
       language: original.language,
       code: original.code,
-      author: user.username, // ✅ Show username instead of just userId
-      authorId: user._id, // ✅ Keep reference if needed
+
+      author: user.username,          // ✅ Use username, not ID
+      authorId: req.userId,           // ✅ Save ID separately
       tags: original.tags,
-      isPublic: true,
-      forkedFrom: original._id, // ✅ Optional but useful for tracking source
-      forkedAt: new Date(),
+      isPublic: false,                // ✅ Keep fork private by default
+
+      forkedFrom: original._id,       // ✅ Link to original
+      forkedAt: new Date(),           // ✅ Timestamp
     });
 
     await newSnippet.save();
 
     res.json({
-      message: "✅ Snippet forked successfully",
+      message: "Snippet forked successfully",
       snippet: newSnippet,
     });
   } catch (err) {
-    console.error("❌ Fork error:", err);
+    console.error("Fork error:", err);
     res.status(500).json({ error: "Error forking snippet" });
   }
 });
+
 
 
 
