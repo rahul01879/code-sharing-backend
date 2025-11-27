@@ -1124,7 +1124,11 @@ app.post("/api/snippets/:id/like", verifyToken, async (req, res) => {
       snippet.likes.splice(existingLikeIndex, 1);
       action = "unliked";
     } else {
-      snippet.likes.push({ userId });
+      snippet.likes.push({
+        userId,
+        date: new Date(),
+      });
+
       action = "liked";
     }
 
