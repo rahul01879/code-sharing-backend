@@ -824,7 +824,7 @@ app.post("/api/snippets", verifyToken, async (req, res) => {
       language,
       code,
       author: user.username,
-    
+      authorId: req.userId, 
       isPublic: !!isPublic,
       tags: tags?.map((t) => t.toLowerCase().trim()) || [],
     });
