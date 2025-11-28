@@ -820,13 +820,15 @@ app.post("/api/snippets", verifyToken, async (req, res) => {
 
     const snippet = new Snippet({
       title: title.trim(),
-      description: description || "",
-      language: (language || "javascript").toLowerCase().trim(),
-      code: code || "",
+      description,
+      language,
+      code,
       author: user.username,
+    
       isPublic: !!isPublic,
       tags: tags?.map((t) => t.toLowerCase().trim()) || [],
     });
+
 
     await snippet.save();
     await logActivity(req.userId, user.username, "created", snippet);
